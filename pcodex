@@ -117,12 +117,13 @@ fi
 # Name the command explicitly, so any other one can replace it. The container is the
 # sandbox, so Codex's own (bubblewrap) one, which could not create namespaces in here
 # anyway, is always off; PCODEX_NO_YOLO only brings back the approval prompts.
+# --no-alt-screen keeps output in the terminal's scrollback, selectable and copyable.
 if [ "$MODE" = "shell" ]; then
   cmd=(bash)
 elif [ "${PCODEX_NO_YOLO:-}" = 1 ]; then
-  cmd=(codex --sandbox danger-full-access --ask-for-approval on-request)
+  cmd=(codex --no-alt-screen --sandbox danger-full-access --ask-for-approval on-request)
 else
-  cmd=(codex --dangerously-bypass-approvals-and-sandbox)
+  cmd=(codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox)
 fi
 
 exec podman run "${args[@]}" "$IMAGE" "${cmd[@]}" "$@"

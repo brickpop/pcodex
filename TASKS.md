@@ -36,4 +36,5 @@
 - Ported from pclaude (Claude Code) to Codex CLI. The macOS Keychain sync is gone: Codex
   stores its login in `~/.codex/auth.json` by default, which is simply mounted.
 - Launcher tests against a fake `podman` (`just test`), covering arg passthrough, yolo
-  flag (on by default, `PCODEX_NO_YOLO=1` restores approvals only), hardening flags, mounts, relabelling, env forwarding, `$HOME`/`/` guards, builds and exit status.
+  flag (on by default, `PCODEX_NO_YOLO=1` restores approvals only), `--no-alt-screen`,
+  hardening flags, mounts, relabelling, env forwarding, `$HOME`/`/` guards, builds and exit status.

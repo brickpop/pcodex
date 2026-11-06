@@ -36,16 +36,16 @@ no_calls() { [ ! -e "$FAKE_LOG" ] || { echo "  podman was called"; exit 1; }; }
 test_runs_codex_yolo_with_args_untouched() {
   run exec "two words" '$HOME' --model o3
   eq "$status" 0
-  eq "$(cmd)" 'codex --dangerously-bypass-approvals-and-sandbox exec two words $HOME --model o3'
-  seq_in_log codex --dangerously-bypass-approvals-and-sandbox exec "two words" '$HOME' --model o3
+  eq "$(cmd)" 'codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox exec two words $HOME --model o3'
+  seq_in_log codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox exec "two words" '$HOME' --model o3
 }
 test_no_yolo_restores_approvals_but_not_inner_sandbox() {
   PCODEX_NO_YOLO=1 run resume
-  eq "$(cmd)" "codex --sandbox danger-full-access --ask-for-approval on-request resume"
+  eq "$(cmd)" "codex --no-alt-screen --sandbox danger-full-access --ask-for-approval on-request resume"
 }
 test_no_yolo_other_than_1_stays_yolo() {
   PCODEX_NO_YOLO=0 run
-  eq "$(cmd)" "codex --dangerously-bypass-approvals-and-sandbox"
+  eq "$(cmd)" "codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox"
 }
 test_container_is_hardened() {
   run; seq_in_log --cap-drop all --security-opt no-new-privileges
@@ -57,7 +57,7 @@ test_shell_runs_bash_without_codex_flags() {
 }
 test_launcher_option_after_codex_args_goes_to_codex() {
   run exec --pcodex-shell
-  eq "$(cmd)" "codex --dangerously-bypass-approvals-and-sandbox exec --pcodex-shell"
+  eq "$(cmd)" "codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox exec --pcodex-shell"
 }
 test_project_mounted_at_its_own_path() {
   run

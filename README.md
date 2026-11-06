@@ -68,6 +68,9 @@ pcodex --model o3 resume --last     # any codex flag
 pcodex mcp list                     # any codex subcommand
 ```
 
+Codex always runs with `--no-alt-screen`: it prints inline instead of taking over the
+screen, so its output stays in your terminal's scrollback and you can select and copy it.
+
 The launcher's own options are namespaced so they can never clash with a Codex flag:
 
 | Option | |
