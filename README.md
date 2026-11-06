@@ -113,6 +113,11 @@ that same repo.
 paths or host-only programs (MCP server commands, `notify` scripts...) will not work
 inside the container.
 
+Codex's own sandbox (bubblewrap) is always off — the container is the sandbox, and it
+couldn't create its namespaces in there anyway. `PCODEX_NO_YOLO=1` only brings back the
+approval prompts (`--sandbox danger-full-access` keeps the inner sandbox off). The container runs with no capabilities
+(`--cap-drop all`) and `no-new-privileges`, so nothing inside can escalate via setuid.
+
 Note that the container has **unrestricted network access** — the sandbox is about your
 filesystem, not about what Codex can reach online.
 
@@ -133,7 +138,7 @@ To undo the relabelling of a directory later: `restorecon -R <dir>`.
 | `PCODEX_IMAGE` | `localhost/pcodex` | image to run |
 | `PCODEX_HOME` | `~/.local/share/pcodex` | where the Dockerfile lives |
 | `PCODEX_ARGS` | — | extra `podman run` args |
-| `PCODEX_NO_YOLO` | — | `1` restores Codex's approval prompts and its own sandbox |
+| `PCODEX_NO_YOLO` | — | `1` makes Codex ask for approval when it sees fit (`--ask-for-approval on-request`) |
 | `PCODEX_RELABEL` | `auto` | `z`, `Z` or `off` |
 | `PCODEX_ALLOW_HOME` | — | `1` allows running in `$HOME` |
 

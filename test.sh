@@ -39,9 +39,17 @@ test_runs_codex_yolo_with_args_untouched() {
   eq "$(cmd)" 'codex --dangerously-bypass-approvals-and-sandbox exec two words $HOME --model o3'
   seq_in_log codex --dangerously-bypass-approvals-and-sandbox exec "two words" '$HOME' --model o3
 }
-test_no_yolo_drops_bypass_flag() {
+test_no_yolo_restores_approvals_but_not_inner_sandbox() {
   PCODEX_NO_YOLO=1 run resume
-  eq "$(cmd)" "codex resume"
+  eq "$(cmd)" "codex --sandbox danger-full-access --ask-for-approval on-request resume"
+}
+test_no_yolo_other_than_1_stays_yolo() {
+  PCODEX_NO_YOLO=0 run
+  eq "$(cmd)" "codex --dangerously-bypass-approvals-and-sandbox"
+}
+test_container_is_hardened() {
+  run; seq_in_log --cap-drop all --security-opt no-new-privileges
+  : >"$FAKE_LOG"; run --pcodex-shell; seq_in_log --cap-drop all --security-opt no-new-privileges
 }
 test_shell_runs_bash_without_codex_flags() {
   run --pcodex-shell -c "ls"

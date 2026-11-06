@@ -5,16 +5,15 @@
 - [ ] Build the image and run a real session once (no Podman where the port was done):
       `codex --version` in the build, a host `codex login` being picked up, a token
       refresh inside the container landing in `~/.codex/auth.json`, and
-      `pcodex resume --last` finding host sessions of the same repo.
+      `pcodex resume --last` finding host sessions of the same repo. Also confirm that
+      `--cap-drop all` + `no-new-privileges` break nothing in normal use (git, npm/bun
+      installs, forge, `pcodex --pcodex-shell`).
 
 ## Open decisions
 
 - [ ] `--tty` is always passed. With a non-terminal stdin (`pcodex exec ... | tee`, CI,
       piping a prompt in) Podman may refuse or mangle output. Pass `--tty` only when
       `[ -t 0 ]`?
-- [ ] `PCODEX_NO_YOLO=1` re-enables Codex's own bubblewrap/landlock sandbox, which likely
-      cannot create namespaces inside a rootless container. Keep it as "approvals + own
-      sandbox", or make it pass `--sandbox danger-full-access` and only restore approvals?
 - [ ] No up-front login check: with neither `~/.codex/auth.json` nor an API key, Codex
       itself asks to log in inside the container, where only `--device-auth` works. Fail
       early with a hint instead?
@@ -37,4 +36,4 @@
 - Ported from pclaude (Claude Code) to Codex CLI. The macOS Keychain sync is gone: Codex
   stores its login in `~/.codex/auth.json` by default, which is simply mounted.
 - Launcher tests against a fake `podman` (`just test`), covering arg passthrough, yolo
-  flag, mounts, relabelling, env forwarding, `$HOME`/`/` guards, builds and exit status.
+  flag (on by default, `PCODEX_NO_YOLO=1` restores approvals only), hardening flags, mounts, relabelling, env forwarding, `$HOME`/`/` guards, builds and exit status.

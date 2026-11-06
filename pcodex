@@ -31,7 +31,7 @@ Environment:
   PCODEX_IMAGE       Image name             (default: localhost/pcodex)
   PCODEX_HOME        Dir holding Dockerfile (default: ~/.local/share/pcodex)
   PCODEX_ARGS        Extra podman run args  (e.g. "-v /data:/data:z -e FOO=bar")
-  PCODEX_NO_YOLO     Set to 1 to drop --dangerously-bypass-approvals-and-sandbox
+  PCODEX_NO_YOLO     Set to 1 to have Codex ask for approval (on request)
   PCODEX_RELABEL     SELinux mount label: auto (default), z, Z or off
   PCODEX_ALLOW_HOME  Set to 1 to allow running in $HOME
 EOF
@@ -90,6 +90,9 @@ esac
 args=(
   --rm --interactive --tty
   --hostname pcodex
+  # Codex runs unprivileged and needs no capabilities; nothing in it may regain them via setuid.
+  --cap-drop all
+  --security-opt no-new-privileges
   --userns "keep-id:uid=1000,gid=1000"
   --volume "$PWD:$PWD${Z:+:$Z}"
   --workdir "$PWD"
@@ -111,13 +114,15 @@ if [ -n "${PCODEX_ARGS:-}" ]; then
   args+=("${extra[@]}")
 fi
 
-# Name the command explicitly, so any other one can replace it. The container is
-# the sandbox, so Codex's own (bubblewrap/landlock) sandbox is bypassed.
+# Name the command explicitly, so any other one can replace it. The container is the
+# sandbox, so Codex's own (bubblewrap) one, which could not create namespaces in here
+# anyway, is always off; PCODEX_NO_YOLO only brings back the approval prompts.
 if [ "$MODE" = "shell" ]; then
   cmd=(bash)
+elif [ "${PCODEX_NO_YOLO:-}" = 1 ]; then
+  cmd=(codex --sandbox danger-full-access --ask-for-approval on-request)
 else
-  cmd=(codex)
-  [ "${PCODEX_NO_YOLO:-}" = 1 ] || cmd+=(--dangerously-bypass-approvals-and-sandbox)
+  cmd=(codex --dangerously-bypass-approvals-and-sandbox)
 fi
 
 exec podman run "${args[@]}" "$IMAGE" "${cmd[@]}" "$@"
