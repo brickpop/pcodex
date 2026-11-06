@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# pcodex — run Codex CLI inside a Podman container, scoped to the current directory.
+#
+# Every argument is passed straight through to `codex`. The launcher's own
+# options are namespaced with --pcodex-* so they can never collide.
+set -euo pipefail
+
+# Fully qualified so Podman resolves this locally instead of querying registries.
+IMAGE="${PCODEX_IMAGE:-localhost/pcodex}"
+SHARE="${PCODEX_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/pcodex}"
+MODE="run"
+
+die() { printf 'pcodex: %s\n' "$*" >&2; exit 1; }
+
+usage() {
+  cat <<'EOF'
+Usage: pcodex [--pcodex-*] [codex args...]
+
+Everything that is not a --pcodex-* option goes to Codex untouched:
+  pcodex                        Interactive session in the current directory
+  pcodex exec "fix the tests"   Non-interactive mode
+  pcodex resume --last          Any codex flag or subcommand
+
+Launcher options (before the codex args):
+  --pcodex-build    Build the image
+  --pcodex-update   Rebuild it from scratch (--pull --no-cache)
+  --pcodex-shell    Open a shell in the container instead of Codex
+  --pcodex-help     This message
+
+Environment:
+  PCODEX_IMAGE       Image name             (default: localhost/pcodex)
+  PCODEX_HOME        Dir holding Dockerfile (default: ~/.local/share/pcodex)
+  PCODEX_ARGS        Extra podman run args  (e.g. "-v /data:/data:z -e FOO=bar")
+  PCODEX_NO_YOLO     Set to 1 to drop --dangerously-bypass-approvals-and-sandbox
+  PCODEX_RELABEL     SELinux mount label: auto (default), z, Z or off
+  PCODEX_ALLOW_HOME  Set to 1 to allow running in $HOME
+EOF
+}
+
+build_image() {
+  [ -f "$SHARE/Dockerfile" ] || die "no Dockerfile in $SHARE — re-run install.sh from the repo"
+  podman build -t "$IMAGE" "$@" "$SHARE"
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --pcodex-help)   usage; exit 0 ;;
+    --pcodex-build)  MODE="build"; shift ;;
+    --pcodex-update) MODE="update"; shift ;;
+    --pcodex-shell)  MODE="shell"; shift ;;
+    *) break ;;
+  esac
+done
+
+case "$MODE" in
+  build)  build_image "$@"; exit 0 ;;
+  update) build_image --pull --no-cache "$@"; exit 0 ;;
+esac
+
+# Guard against relabelling / exposing an entire home directory by accident.
+case "$PWD" in
+  /) die "refusing to run in /" ;;
+  "$HOME") [ "${PCODEX_ALLOW_HOME:-}" = 1 ] || die "refusing to mount all of \$HOME (set PCODEX_ALLOW_HOME=1 to override)" ;;
+esac
+
+if ! podman image exists "$IMAGE"; then
+  echo "pcodex: image $IMAGE not found, building it once..." >&2
+  build_image
+fi
+
+# Codex keeps its login, config and sessions here; create it so Podman doesn't make it root-owned.
+mkdir -p "$HOME/.codex"
+
+# SELinux hosts (Fedora, RHEL...) need a relabel suffix on bind mounts:
+#   PCODEX_RELABEL=z    shared label, lets concurrent sessions share ~/.codex
+#   PCODEX_RELABEL=Z    private label, stricter, for one session at a time
+#   PCODEX_RELABEL=off  plain bind mounts
+relabel="${PCODEX_RELABEL:-auto}"
+if [ "$relabel" = auto ]; then
+  if [ -f /sys/fs/selinux/enforce ]; then relabel=z; else relabel=off; fi
+fi
+case "$relabel" in
+  z|Z) Z="$relabel" ;;
+  off) Z="" ;;
+  *)   die "PCODEX_RELABEL must be z, Z, off or auto" ;;
+esac
+
+# The project keeps its host path inside the container, so Codex's per-directory
+# session filtering (`codex resume`) matches the host.
+args=(
+  --rm --interactive --tty
+  --hostname pcodex
+  --userns "keep-id:uid=1000,gid=1000"
+  --volume "$PWD:$PWD${Z:+:$Z}"
+  --workdir "$PWD"
+  --volume "$HOME/.codex:/home/node/.codex${Z:+:$Z}"
+)
+
+if [ -f "$HOME/.gitconfig" ]; then
+  args+=(--volume "$HOME/.gitconfig:/home/node/.gitconfig:ro${Z:+,$Z}")
+fi
+
+for var in OPENAI_API_KEY OPENAI_BASE_URL CODEX_API_KEY CODEX_ACCESS_TOKEN \
+           GH_TOKEN TERM COLORTERM; do
+  if [ -n "${!var-}" ]; then args+=(--env "$var=${!var}"); fi
+done
+
+# Word-split PCODEX_ARGS the way a shell would.
+if [ -n "${PCODEX_ARGS:-}" ]; then
+  read -r -a extra <<<"$PCODEX_ARGS"
+  args+=("${extra[@]}")
+fi
+
+# Name the command explicitly, so any other one can replace it. The container is
+# the sandbox, so Codex's own (bubblewrap/landlock) sandbox is bypassed.
+if [ "$MODE" = "shell" ]; then
+  cmd=(bash)
+else
+  cmd=(codex)
+  [ "${PCODEX_NO_YOLO:-}" = 1 ] || cmd+=(--dangerously-bypass-approvals-and-sandbox)
+fi
+
+exec podman run "${args[@]}" "$IMAGE" "${cmd[@]}" "$@"
